@@ -1,0 +1,56 @@
+# ======================================
+# EXPLORATORY DATA ANALYSIS
+# ======================================
+
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Load data
+df = pd.read_csv("../data/raw/cotton_traits_raw.csv")
+
+# Basic info
+print(df.head())
+print(df.describe())
+
+# Correlation heatmap
+plt.figure(figsize=(10,6))
+sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
+plt.title("Trait Correlation")
+plt.show()
+
+# Pairplot
+sns.pairplot(df)
+plt.show()
+
+# Distribution plots
+for col in df.columns[1:]:
+    plt.figure()
+    sns.histplot(df[col], kde=True)
+    plt.title(col)
+    plt.show()
+
+# ======================================
+# FULL ML PIPELINE NOTEBOOK
+# ======================================
+
+from src.preprocess import DataPreprocessor
+from src.model import TraitModel
+from src.evaluate import Evaluator
+
+TARGETS = ["Yield", "LintYield", "SeedYield"]
+
+# Preprocess
+pre = DataPreprocessor(TARGETS)
+X, y = pre.run("../data/raw/cotton_traits_raw.csv")
+
+# Train
+model_obj = TraitModel("rf")
+model, X_test, y_test = model_obj.train(X, y)
+
+# Evaluate
+eval_obj = Evaluator(model)
+y_pred, results = eval_obj.evaluate(X_test, y_test)
+
+# Plot
+eval_obj.plot(y_test, y_pred)
