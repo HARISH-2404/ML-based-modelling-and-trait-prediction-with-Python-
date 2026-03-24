@@ -1,1 +1,157 @@
+# ==========================================================
+# RESULTS GENERATION MODULE
+# ==========================================================
 
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import joblib
+
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+
+
+# =========================================
+# CREATE RESULTS FOLDERS
+# =========================================
+
+def create_results_folders(base="results"):
+    paths = [
+        "metrics",
+        "plots",
+        "models"
+    ]
+
+    for p in paths:
+        os.makedirs(os.path.join(base, p), exist_ok=True)
+
+
+# =========================================
+# SAVE MODEL
+# =========================================
+
+def save_model(model, path="results/models/model.pkl"):
+    joblib.dump(model, path)
+    print(f"Model saved at {path}")
+
+
+# =========================================
+# SAVE METRICS
+# =========================================
+
+def save_metrics(y_test, y_pred, output="results/metrics/model_performance.csv"):
+    
+    results = {}
+
+    for i, col in enumerate(y_test.columns):
+        r2 = r2_score(y_test.iloc[:, i], y_pred[:, i])
+        rmse = np.sqrt(mean_squared_error(y_test.iloc[:, i], y_pred[:, i]))
+        mae = mean_absolute_error(y_test.iloc[:, i], y_pred[:, i])
+
+        results[col] = {
+            "R2": r2,
+            "RMSE": rmse,
+            "MAE": mae
+        }
+
+    df = pd.DataFrame(results).T
+    df.to_csv(output)
+
+    print("Metrics saved at:", output)
+    return df
+
+
+# =========================================
+# CORRELATION HEATMAP
+# =========================================
+
+def plot_correlation(df, path="results/plots/correlation_heatmap.png"):
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(df.corr(), annot=True, cmap="coolwarm")
+    plt.title("Trait Correlation Heatmap")
+
+    plt.savefig(path, dpi=300, bbox_inches='tight')
+    plt.close()
+
+    print("Heatmap saved at:", path)
+
+
+# =========================================
+# PREDICTION PLOTS
+# =========================================
+
+def plot_predictions(y_test, y_pred, folder="results/plots"):
+    
+    os.makedirs(folder, exist_ok=True)
+
+    for i, col in enumerate(y_test.columns):
+
+        plt.figure()
+
+        plt.scatter(y_test.iloc[:, i], y_pred[:, i])
+        plt.xlabel("Observed")
+        plt.ylabel("Predicted")
+        plt.title(f"{col} Prediction")
+
+        # 45-degree reference line
+        min_val = min(y_test.iloc[:, i].min(), y_pred[:, i].min())
+        max_val = max(y_test.iloc[:, i].max(), y_pred[:, i].max())
+        plt.plot([min_val, max_val], [min_val, max_val], linestyle='--')
+
+        file_path = f"{folder}/{col}_prediction.png"
+        plt.savefig(file_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"{col} plot saved at:", file_path)
+
+
+# =========================================
+# RESIDUAL PLOTS (BONUS 🔥)
+# =========================================
+
+def plot_residuals(y_test, y_pred, folder="results/plots"):
+
+    for i, col in enumerate(y_test.columns):
+
+        residuals = y_test.iloc[:, i] - y_pred[:, i]
+
+        plt.figure()
+        sns.histplot(residuals, kde=True)
+        plt.title(f"{col} Residual Distribution")
+
+        file_path = f"{folder}/{col}_residuals.png"
+        plt.savefig(file_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"{col} residual plot saved at:", file_path)
+
+
+# =========================================
+# FULL RESULTS PIPELINE
+# =========================================
+
+def generate_all_results(model, X_test, y_test, df_full):
+    
+    print("Generating results...")
+
+    create_results_folders()
+
+    # Predictions
+    y_pred = model.predict(X_test)
+
+    # Save model
+    save_model(model)
+
+    # Save metrics
+    metrics_df = save_metrics(y_test, y_pred)
+
+    # Plots
+    plot_correlation(df_full)
+    plot_predictions(y_test, y_pred)
+    plot_residuals(y_test, y_pred)
+
+    print("All results generated successfully 🚀")
+
+    return metrics_df
