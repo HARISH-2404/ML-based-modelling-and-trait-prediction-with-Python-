@@ -1,0 +1,187 @@
+# =========================================
+# COMPLETE DATA PIPELINE FOR ML PROJECT
+# =========================================
+
+import os
+import pandas as pd
+import numpy as np
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+
+
+# =========================================
+# CREATE DATA DIRECTORY STRUCTURE
+# =========================================
+
+def create_data_folders(base_path="data"):
+    folders = ["raw", "processed", "external"]
+
+    for folder in folders:
+        path = os.path.join(base_path, folder)
+        os.makedirs(path, exist_ok=True)
+        logging.info(f"Created folder: {path}")
+
+
+# =========================================
+# CREATE RAW DATASET
+# =========================================
+
+def create_raw_dataset(path="data/raw/cotton_traits_raw.csv", n=50):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    np.random.seed(42)
+
+    df = pd.DataFrame({
+        "Genotype": [f"G{i}" for i in range(1, n+1)],
+        "PlantHeight": np.random.normal(180, 15, n),
+        "Sympodia": np.random.normal(16, 3, n),
+        "Monopodia": np.random.randint(1, 3, n),
+        "Bolls": np.random.normal(30, 5, n),
+        "Yield": np.random.normal(220, 30, n),
+        "GOT": np.random.normal(35, 2, n),
+    })
+
+    # Derived traits
+    df["LintYield"] = (df["Yield"] * df["GOT"]) / 100
+    df["SeedYield"] = df["Yield"] - df["LintYield"]
+
+    df.to_csv(path, index=False)
+    logging.info(f"Raw dataset saved at: {path}")
+
+
+# =========================================
+# DATA CLEANING PIPELINE
+# =========================================
+
+def process_data(
+    input_path="data/raw/cotton_traits_raw.csv",
+    output_path="data/processed/cotton_traits_clean.csv"
+):
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"{input_path} not found!")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    df = pd.read_csv(input_path)
+    logging.info(f"Original shape: {df.shape}")
+
+    # Remove duplicates
+    df = df.drop_duplicates()
+
+    # Handle missing values
+    df = df.fillna(df.mean(numeric_only=True))
+
+    # Remove outliers safely
+    try:
+        from scipy.stats import zscore
+
+        numeric_cols = df.select_dtypes(include=['float64', 'int64']).columns
+        z_scores = np.abs(zscore(df[numeric_cols]))
+
+        df = df[(z_scores < 3).all(axis=1)]
+        logging.info("Outliers removed using Z-score")
+
+    except ImportError:
+        logging.warning("Scipy not installed. Skipping outlier removal.")
+
+    logging.info(f"Cleaned shape: {df.shape}")
+
+    df.to_csv(output_path, index=False)
+    logging.info(f"Processed data saved at: {output_path}")
+
+
+# =========================================
+# CREATE EXTERNAL WEATHER DATA
+# =========================================
+
+def create_weather_data(path="data/external/weather_data.csv", n=50):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    np.random.seed(42)
+
+    df = pd.DataFrame({
+        "Day": range(1, n+1),
+        "Temperature": np.random.normal(30, 3, n),
+        "Rainfall": np.random.normal(5, 2, n),
+        "Humidity": np.random.normal(70, 10, n)
+    })
+
+    df.to_csv(path, index=False)
+    logging.info(f"Weather data saved at: {path}")
+
+
+# =========================================
+# MERGE DATASETS (IMPROVED)
+# =========================================
+
+def merge_datasets(
+    trait_path="data/processed/cotton_traits_clean.csv",
+    weather_path="data/external/weather_data.csv",
+    output_path="data/processed/final_dataset.csv"
+):
+    if not os.path.exists(trait_path):
+        raise FileNotFoundError(f"{trait_path} not found!")
+
+    if not os.path.exists(weather_path):
+        raise FileNotFoundError(f"{weather_path} not found!")
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+    traits = pd.read_csv(trait_path)
+    weather = pd.read_csv(weather_path)
+
+    # Better merging logic
+    min_len = min(len(traits), len(weather))
+    traits = traits.iloc[:min_len]
+    weather = weather.iloc[:min_len]
+
+    merged = pd.concat([traits.reset_index(drop=True),
+                        weather.reset_index(drop=True)], axis=1)
+
+    merged.to_csv(output_path, index=False)
+    logging.info(f"Final merged dataset saved at: {output_path}")
+
+
+# =========================================
+# VALIDATION FUNCTION (NEW 🔥)
+# =========================================
+
+def validate_dataset(path):
+    df = pd.read_csv(path)
+
+    logging.info("Checking dataset quality...")
+    logging.info(f"Shape: {df.shape}")
+    logging.info(f"Missing values:\n{df.isnull().sum()}")
+
+    if df.isnull().sum().sum() == 0:
+        logging.info("No missing values found ✅")
+    else:
+        logging.warning("Missing values present ⚠️")
+
+
+# =========================================
+# MAIN PIPELINE
+# =========================================
+
+def run_pipeline():
+    logging.info("Starting data pipeline...")
+
+    create_data_folders()
+    create_raw_dataset()
+    process_data()
+    create_weather_data()
+    merge_datasets()
+
+    validate_dataset("data/processed/final_dataset.csv")
+
+    logging.info("Pipeline completed successfully 🚀")
+
+
+# =========================================
+# EXECUTION
+# =========================================
+
+if __name__ == "__main__":
+    run_pipeline()
